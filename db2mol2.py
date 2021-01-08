@@ -5,11 +5,13 @@ import argparse
 parser = argparse.ArgumentParser(description='Convert DB2 format compound library back to mol2.')
 parser.add_argument('-i', '--input', type=str, required=True, help='Input db2 file. Could be compressed or uncompressed')
 parser.add_argument('-o','--output', type=str, required=True, help='Output file')
+parser.add_argument('-s','--outputsolv', type=str, help='Generate output.solv file', default='')
 
 args = parser.parse_args()
 
 infile = args.input
 outfile = args.output
+outputsolv = args.outputsolv
 
 # Load all lines
 if infile.endswith(".gz"):
@@ -177,6 +179,46 @@ class DB2File:
             for db2block in self.db2blocks:
                 db2block.write_mol2(ofp)
 
+    def generate_outputsolv(self,outfile):
+        outfilelines = list()
+        headline = self._get_outputsolv_headline()
+        atomline = self._get_outputsolv_atomline()
+        with open(outfile, 'w') as ofp:
+            ofp.write(headline)
+            for tmp in atomline:
+                ofp.write(tmp)
+
+    def _get_outputsolv_headline(self):
+        dbblock =self.db2blocks[0]
+        m = dbblock.m
+        atomnumber = int( m.mlines[0].split()[3] )
+        secondline = m.mlines[1]
+        items = secondline.split()
+        charge = float(items[1])
+        polsolv = float(items[2])
+        apolsolv = float(items[3])
+        totalsolv = float(items[4])
+        surfa = float(items[5])
+        mol2filename = 'output.mol2'
+        output = f"{mol2filename} {atomnumber} {charge} {polsolv} {surfa} {apolsolv} {totalsolv}\n"
+        return output
+
+    def _get_outputsolv_atomline(self):
+        dbblock =self.db2blocks[0]
+        atomlines = dbblock.a.alines
+        output = list()
+        for line in atomlines:
+            items = line.split()
+            #A NUM NAME TYPEX DT CO +CHA.RGEX +POLAR.SOL +APOLA.SOL +TOTAL.SOL SURFA.REA
+            charge = float(items[6])
+            pol = float(items[7])
+            apol = float(items[8])
+            total = float(items[9])
+            surfa = float(items[10])
+            tmp = f"{charge} {pol} {total} {surfa} {apol}\n"
+            output.append(tmp)
+        return output
+
 class DB2Block:
     def __init__(self,input_content,convert_back = True):
         if hasattr(input_content,'readlines'):
@@ -265,3 +307,6 @@ class Conformation:
 
 a = DB2File(infile)
 a.convert_to_mol2(outfile)
+if outputsolv:
+    a.generate_outputsolv(outputsolv)
+
